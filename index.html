@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>Breathing Station | PRO Terminal</title>
-    <!-- Библиотеки -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://s3.tradingview.com/tv.js"></script>
     <style>
@@ -14,66 +13,52 @@
         }
         
         body { 
-            background: var(--bg); 
-            color: #eaecef; 
-            font-family: 'Consolas', monospace; 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden; 
-            height: 100vh; 
-            display: flex; 
-            flex-direction: column; 
+            background: var(--bg); color: #eaecef; 
+            font-family: 'Consolas', monospace; margin: 0; padding: 0; 
+            overflow: hidden; height: 100vh; display: flex; flex-direction: column;
         }
-        
+
         /* Шапка */
         #header { 
-            height: 35px; 
-            display: flex; 
-            align-items: center; 
-            padding: 0 15px; 
-            background: #161a1e; 
-            border-bottom: 1px solid #2b3139; 
-            justify-content: space-between; 
-            flex-shrink: 0; 
+            height: 35px; display: flex; align-items: center; padding: 0 15px; 
+            background: #161a1e; border-bottom: 1px solid #2b3139; 
+            justify-content: space-between; flex-shrink: 0; 
         }
-        .logo { color: var(--orange); font-size: 12px; font-weight: bold; letter-spacing: 1px; }
-        .status { font-size: 11px; }
+        .logo { color: var(--orange); font-size: 12px; font-weight: bold; }
         input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 2px 5px; width: 100px; font-size: 11px; border-radius: 3px; }
         button { background: var(--orange); border: none; padding: 2px 10px; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; }
 
         /* График */
         #chart-wrap { height: 35%; width: 100%; flex-shrink: 0; background: #000; border-bottom: 2px solid var(--orange); }
 
-        /* Терминал */
+        /* НИЖНЯЯ ПАНЕЛЬ (Терминал + Аналитика) */
+        .main-bottom-area { display: flex; height: 65%; overflow: hidden; }
+
         #terminal { 
-            height: 65%; 
-            background: #000; 
-            overflow-y: auto; 
-            padding: 10px 15px;
-            display: flex;
-            flex-direction: column; 
-            scroll-behavior: smooth;
+            flex: 1; background: #000; overflow-y: auto; 
+            padding: 10px 15px; display: flex; flex-direction: column; 
+            scroll-behavior: smooth; border-right: 1px solid #2b3139;
         }
 
-        .row { 
-            white-space: nowrap; 
-            line-height: 1.6; 
-            border-bottom: 1px solid #111; 
-            font-size: 16px; 
-            font-weight: 500;
-            flex-shrink: 0;
-            padding: 2px 0;
+        #analytics-panel { width: 450px; background: #050505; display: flex; flex-direction: column; flex-shrink: 0; }
+
+        .analytics-header { 
+            padding: 8px 15px; background: #161a1e; display: flex; 
+            justify-content: space-between; align-items: center; border-bottom: 1px solid #2b3139;
         }
+
+        .row { white-space: nowrap; line-height: 1.6; border-bottom: 1px solid #111; font-size: 15px; padding: 2px 0; }
+
+        /* Таблица аналитики */
+        #stats-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        #stats-table th { color: var(--gray); text-align: left; padding: 8px; border-bottom: 1px solid #222; }
+        #stats-table td { padding: 8px; border-bottom: 1px solid #111; }
 
         /* Классы раскраски */
-        .c-gray { color: var(--gray); }
-        .c-orange { color: var(--orange); }
-        .c-pink { color: var(--pink); }
-        .c-red { color: var(--red); }
+        .c-gray { color: var(--gray); } .c-orange { color: var(--orange); }
+        .c-pink { color: var(--pink); } .c-red { color: var(--red); }
         .c-bright-red { color: var(--bright-red); font-weight: bold; text-shadow: 0 0 8px rgba(255,0,0,0.4); }
-        .c-blue { color: var(--blue); }
-        .c-cyan { color: var(--cyan); }
-        .c-green { color: var(--green); }
+        .c-blue { color: var(--blue); } .c-cyan { color: var(--cyan); } .c-green { color: var(--green); }
         
         .watermark { position: fixed; bottom: 5px; right: 25px; font-size: 12px; color: var(--orange); opacity: 0.3; pointer-events: none; }
     </style>
@@ -90,32 +75,50 @@
 </div>
 
 <div id="chart-wrap">
-    <div id="tradingview_chart" style="width: 100%; height: 100%;"></div>
+    <div id="tradingview_chart"></div>
 </div>
 
-<div id="terminal"></div>
+<div class="main-bottom-area">
+    <!-- Лево: Живой лог -->
+    <div id="terminal"></div>
+
+    <!-- Право: Аналитика -->
+    <div id="analytics-panel">
+        <div class="analytics-header">
+            <span class="c-orange" style="font-weight:bold">HISTORY (OHLCV)</span>
+            <div style="display:flex; gap:5px;">
+                <button onclick="setTF(1)">1m</button>
+                <button onclick="setTF(5)">5m</button>
+                <button onclick="setTF(60)">1h</button>
+            </div>
+        </div>
+        <div style="overflow-y:auto; flex:1;">
+            <table id="stats-table">
+                <thead>
+                    <tr>
+                        <th>Time (UTC)</th>
+                        <th>Price Range</th>
+                        <th>Vol</th>
+                    </tr>
+                </thead>
+                <tbody id="stats-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
 <div class="watermark">Baitan_0501 白坦</div>
 
 <script>
     let socket;
+    let historyData = []; // Для аналитики
+    let currentTF = 1;
 
     function initTV() {
-        if (typeof TradingView === 'undefined') {
-            setTimeout(initTV, 500);
-            return;
-        }
         new TradingView.widget({
-            "autosize": true,
-            "symbol": "BINANCE:BTCUSDT",
-            "interval": "15",
-            "timezone": "Etc/UTC",
-            "theme": "dark",
-            "style": "1",
-            "locale": "ru",
-            "container_id": "tradingview_chart",
-            "hide_top_toolbar": true,
-            "save_image": false
+            "autosize": true, "symbol": "BINANCE:BTCUSDT", "interval": "15",
+            "timezone": "Etc/UTC", "theme": "dark", "style": "1", "locale": "ru",
+            "container_id": "tradingview_chart", "hide_top_toolbar": true
         });
     }
 
@@ -123,69 +126,72 @@
         const targetIp = document.getElementById('ip').value;
         const st = document.getElementById('st');
         if (socket) socket.disconnect();
-        
         socket = io(`http://${targetIp}:8080`, { transports: ['websocket'] });
-
-        socket.on('connect', () => {
-            st.innerText = "● ONLINE";
-            st.style.color = "var(--green)";
-        });
-
-        socket.on('market_data', (data) => {
-            addTerminalRow(data);
-        });
+        socket.on('connect', () => { st.innerText = "● ONLINE"; st.style.color = "var(--green)"; });
+        socket.on('market_data', (data) => { addTerminalRow(data); });
     }
 
     function addTerminalRow(data) {
         const term = document.getElementById('terminal');
         const row = document.createElement('div');
         
-        // Превращаем данные в числа для логики
         const vol = parseFloat(data.vol);
         const trades = parseInt(data.trades);
         const hold = parseFloat(data.hold);
         const rsi = parseFloat(data.rsi);
         const isBuy = data.side === '+';
 
-        // 1. Логика цвета ОБЪЕМА (Vol)
-        let volClass = 'c-gray';
-        if (vol >= 50) volClass = 'c-bright-red';
-        else if (vol >= 20) volClass = 'c-red';
-        else if (vol >= 10) volClass = 'c-pink';
-        else if (vol >= 1) volClass = 'c-orange';
-
-        // 2. Логика цвета СДЕЛОК (TR)
-        let trClass = 'c-gray';
-        if (trades > 1000) trClass = 'c-bright-red';
-        else if (trades >= 500) trClass = 'c-red';
-        else if (trades >= 50) trClass = 'c-orange';
-
-        // 3. Логика цвета ХОЛДА (Hold)
+        // Твоя логика раскраски (сохранил полностью!)
+        let volClass = vol >= 50 ? 'c-bright-red' : vol >= 20 ? 'c-red' : vol >= 10 ? 'c-pink' : vol >= 1 ? 'c-orange' : 'c-gray';
+        let trClass = trades > 1000 ? 'c-bright-red' : trades >= 500 ? 'c-red' : trades >= 50 ? 'c-orange' : 'c-gray';
         let holdClass = hold > 5 ? 'c-cyan' : 'c-blue';
-
-        // 4. Логика цвета RSI
-        let rsiClass = 'c-blue'; 
-        if (rsi >= 70) rsiClass = 'c-red'; 
-        else if (rsi <= 30) rsiClass = 'c-green'; 
+        let rsiClass = rsi >= 70 ? 'c-red' : rsi <= 30 ? 'c-green' : 'c-blue';
 
         row.className = 'row';
         row.innerHTML = `
             <span class="c-gray">[${data.time}]</span> 
             <b class="${isBuy ? 'c-green' : 'c-red'}">${isBuy ? '▲ BUY ' : '▼ SELL'}</b> 
-            <span style="font-size: 18px; color: white;">$${data.price}</span> 
-            <span class="c-gray">| Vol:</span><span class="${volClass}">${data.vol}</span> 
-            <span class="c-gray">| TR:</span><span class="${trClass}">${data.trades}</span> 
-            <span class="c-gray">| Hold:</span><span class="${holdClass}">${data.hold}s</span> 
-            <span class="c-gray">| RSI:</span><span class="${rsiClass}">${data.rsi}</span>
+            <span style="color: white;">$${data.price}</span> 
+            <span class="c-gray">| V:</span><span class="${volClass}">${data.vol}</span> 
+            <span class="c-gray">| T:</span><span class="${trClass}">${data.trades}</span> 
+            <span class="c-gray">| H:</span><span class="${holdClass}">${data.hold}s</span> 
+            <span class="c-gray">| R:</span><span class="${rsiClass}">${data.rsi}</span>
         `;
 
         term.appendChild(row); 
         term.scrollTop = term.scrollHeight;
+        if (term.childNodes.length > 100) term.removeChild(term.firstChild);
 
-        if (term.childNodes.length > 150) {
-            term.removeChild(term.firstChild);
-        }
+        // Сохраняем для истории
+        historyData.push({ t: Date.now(), p: parseFloat(data.price), v: vol });
+        if (historyData.length > 2000) historyData.shift();
+        renderAnalytics();
     }
+
+    function renderAnalytics() {
+        const interval = currentTF * 60 * 1000;
+        const groups = {};
+        historyData.forEach(d => {
+            const key = Math.floor(d.t / interval) * interval;
+            if (!groups[key]) groups[key] = { min: d.p, max: d.p, vol: 0 };
+            groups[key].min = Math.min(groups[key].min, d.p);
+            groups[key].max = Math.max(groups[key].max, d.p);
+            groups[key].vol += d.v;
+        });
+
+        const body = document.getElementById('stats-body');
+        body.innerHTML = '';
+        Object.keys(groups).sort((a,b) => b-a).slice(0, 15).forEach(t => {
+            const g = groups[t];
+            body.innerHTML += `<tr>
+                <td class="c-gray">${new Date(parseInt(t)).toLocaleTimeString()}</td>
+                <td style="color:white">$${g.min} - ${g.max}</td>
+                <td class="c-orange">${g.vol.toFixed(2)}</td>
+            </tr>`;
+        });
+    }
+
+    function setTF(m) { currentTF = m; renderAnalytics(); }
 
     initTV();
 </script>
