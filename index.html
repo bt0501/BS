@@ -2,8 +2,9 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Breathing Station | PRO Terminal v3.7</title>
+    <title>Breathing Station | PRO Terminal v3.8</title>
     <link rel="icon" type="image/png" href="https://github.com/bt0501/BS/blob/main/icob.png?raw=true">
+    <link rel="manifest" href="./manifest.json">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://s3.tradingview.com/tv.js"></script>
     <style>
@@ -64,7 +65,7 @@
 <body>
 
 <div id="header">
-    <div class="logo">BREATHING_STATION_v3.7</div>
+    <div class="logo">BREATHING_STATION_v3.8 (PWA)</div>
     <div class="status">
         <span id="st" style="color:var(--red)">● OFFLINE</span> | 
         IP: <input type="text" id="ip" value="">
@@ -106,8 +107,14 @@
 </div>
 
 <div class="watermark">Baitan_0501 白坦</div>
-
 <script>
+    // 1. Регистрация PWA Service Worker
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js')
+            .then(() => console.log("PWA Service Worker Registered"));
+    }
+
+    // 2. Основные переменные
     let socket;
     let historyData = []; 
     let currentTF = 1;
@@ -117,13 +124,15 @@
         const savedIp = localStorage.getItem('station_ip');
         if (savedIp) document.getElementById('ip').value = savedIp;
 
-        // Восстановление истории из памяти при загрузке[cite: 2]
         const savedHistory = localStorage.getItem('station_history');
         if (savedHistory) {
             try {
                 historyData = JSON.parse(savedHistory);
                 renderAnalytics();
-            } catch (e) { historyData = []; }
+            } catch (e) { 
+                console.error("Ошибка парсинга истории:", e);
+                historyData = []; 
+            }
         }
         initTV();
     };
@@ -139,10 +148,8 @@
     function connect() {
         const targetIp = document.getElementById('ip').value;
         localStorage.setItem('station_ip', targetIp);
-        
         const st = document.getElementById('st');
         if (socket) socket.disconnect();
-        
         socket = io(`http://${targetIp}:8080`, { transports: ['websocket'] });
         socket.on('connect', () => { st.innerText = "● ONLINE"; st.style.color = "var(--green)"; });
         socket.on('market_data', (data) => { addTerminalRow(data); });
@@ -151,7 +158,6 @@
     function addTerminalRow(data) {
         const term = document.getElementById('terminal');
         const row = document.createElement('div');
-        
         const vol = parseFloat(data.vol);
         const trades = parseInt(data.trades);
         const hold = parseFloat(data.hold);
@@ -183,7 +189,7 @@
         historyData.push({ t: Date.now(), p: parseFloat(data.price), v: vol, tr: trades, r: rsi });
         if (historyData.length > 5000) historyData.shift();
 
-        // Сохранение каждого нового тика в память[cite: 2]
+        // Сохранение истории в память
         localStorage.setItem('station_history', JSON.stringify(historyData));
         renderAnalytics();
     }
