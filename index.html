@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Breathing Station | PRO Terminal v3.8</title>
     <link rel="icon" type="image/png" href="https://github.com/bt0501/BS/blob/main/icob.png?raw=true">
-    <link rel="manifest" href="./manifest.json">
+<link rel="manifest" href="./manifest.json">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://s3.tradingview.com/tv.js"></script>
     <style>
@@ -108,10 +108,10 @@
 
 <div class="watermark">Baitan_0501 白坦</div>
 <script>
-    // 1. Регистрация PWA Service Worker
+    // Регистрация Service Worker
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js')
-            .then(() => console.log("PWA Service Worker Registered"));
+        navigator.serviceWorker.register('./SW.js')
+            .then(() => console.log("Service Worker Registered"));
     }
 
     // 2. Основные переменные
