@@ -3,128 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Breathing Station | Live Flow</title>
+    <title>Breathing Station Pro | Live Flow</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <style>
-        :root { --gold: #f0b90b; --bg: #0b0e11; --card: #1e2329; --text: #eaecef; }
-        body { background: var(--bg); color: var(--text); font-family: 'Verdana', sans-serif; margin: 0; padding: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-        .config { background: var(--card); padding: 10px; border-radius: 5px; font-size: 12px; }
-        input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 5px; border-radius: 4px; }
+        :root { --bg: #0b0e11; --card-bg: #1e2329; --green: #0ecb81; --red: #f6465d; --gold: #f0b90b; }
+        body { background: var(--bg); color: #eaecef; font-family: 'Roboto Mono', monospace; margin: 0; overflow: hidden; }
         
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .card { background: var(--card); padding: 20px; border-radius: 12px; border-bottom: 3px solid var(--gold); text-align: center; }
-        .card h3 { margin: 0; font-size: 11px; color: #848e9c; text-transform: uppercase; letter-spacing: 1px; }
-        .value { font-size: 28px; font-weight: bold; margin-top: 10px; }
+        #header { height: 50px; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #2b3139; justify-content: space-between; }
+        .logo { color: var(--gold); font-weight: bold; font-size: 18px; }
         
-        .up { color: #0ecb81; }
-        .down { color: #f6465d; }
+        #chart-container { height: calc(100vh - 150px); width: 100%; }
+
+        /* Бегущая строка / Лента */
+        #ticker-container { 
+            height: 80px; 
+            background: #161a1e; 
+            border-top: 2px solid var(--gold); 
+            display: flex; 
+            align-items: center; 
+            overflow: hidden; 
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .ticker-track { display: flex; align-items: center; animation: scroll 20s linear infinite; }
         
-        #chart-wrapper { background: var(--card); padding: 20px; border-radius: 12px; height: 450px; position: relative; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
-        .online { background: #0ecb81; box-shadow: 0 0 10px #0ecb81; }
-        .offline { background: #f6465d; }
-        .footer { margin-top: 20px; font-size: 12px; color: #474d57; text-align: center; }
+        .stat-card {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 0 10px;
+            background: var(--card-bg);
+            border-radius: 4px;
+            border-left: 3px solid #474d57;
+        }
+
+        .stat-card.buy { border-left-color: var(--green); color: var(--green); }
+        .stat-card.sell { border-left-color: var(--red); color: var(--red); }
+
+        .label { font-size: 10px; color: #848e9c; display: block; text-transform: uppercase; }
+        .val { font-size: 16px; font-weight: bold; }
+
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        .ip-config { font-size: 10px; color: #474d57; }
+        input { background: transparent; border: 1px solid #2b3139; color: #848e9c; width: 100px; font-size: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <div>
-            <span id="status-dot" class="status-dot offline"></span>
-            <span style="font-size: 20px; font-weight: bold;">BREATHING STATION <span style="color:var(--gold)">WEB</span></span>
-        </div>
-        <div class="config">
-            IP Станции: <input type="text" id="targetIp" value="192.168.1.118">
-            <button onclick="connect()">Connect</button>
-        </div>
+<div id="header">
+    <div class="logo">BREATHING STATION <span style="color:white">PRO</span></div>
+    <div class="ip-config">
+        IP: <input type="text" id="targetIp" value="192.168.1.118">
+        <button onclick="connect()">Link</button>
     </div>
-    
-    <div class="grid">
-        <div class="card"><h3>Price BTC</h3><div id="price" class="value">---</div></div>
-        <div class="card"><h3>RSI Index</h3><div id="rsi" class="value">---</div></div>
-        <div class="card"><h3>Vol (1s)</h3><div id="vol" class="value">---</div></div>
-        <div class="card"><h3>Iceberg</h3><div id="hold" class="value">---</div></div>
+</div>
+
+<div id="chart-container"></div>
+
+<div id="ticker-container">
+    <div id="ticker" class="ticker-track">
+        <!-- Карточки будут влетать сюда -->
     </div>
+</div>
 
-    <div id="chart-wrapper">
-        <canvas id="mainChart"></canvas>
-    </div>
+<script>
+    let socket;
+    const chart = LightweightCharts.createChart(document.getElementById('chart-container'), {
+        layout: { backgroundColor: '#0b0e11', textColor: '#848e9c' },
+        grid: { vertLines: { color: '#1f2226' }, horzLines: { color: '#1f2226' } },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        timeScale: { timeVisible: true, secondsVisible: true }
+    });
 
-    <div class="footer">Baitan_0501 白坦 • Analysis Engine</div>
+    const areaSeries = chart.addAreaSeries({
+        lineColor: '#f0b90b',
+        topColor: 'rgba(240, 185, 11, 0.3)',
+        bottomColor: 'rgba(240, 185, 11, 0.0)',
+        lineWidth: 2,
+    });
 
-    <script>
-        let socket;
-        let chart;
-        const ctx = document.getElementById('mainChart').getContext('2d');
+    function connect() {
+        const ip = document.getElementById('targetIp').value;
+        if (socket) socket.disconnect();
+        socket = io(`http://${ip}:8080`);
 
-        function initChart() {
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Live Price',
-                        data: [],
-                        borderColor: '#f0b90b',
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        tension: 0.3,
-                        fill: true,
-                        backgroundColor: 'rgba(240, 185, 11, 0.05)'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { grid: { color: '#2b3139' }, ticks: { color: '#848e9c' } },
-                        x: { display: false }
-                    }
-                }
-            });
+        socket.on('market_data', (data) => {
+            const timeVal = Math.floor(Date.now() / 1000);
+            const price = parseFloat(data.price);
+            
+            // Обновляем график
+            areaSeries.update({ time: timeVal, value: price });
+
+            // Создаем новую карточку в ленте
+            updateTicker(data);
+        });
+    }
+
+    function updateTicker(data) {
+        const ticker = document.getElementById('ticker');
+        const card = document.createElement('div');
+        const sideClass = data.side === '+' ? 'buy' : 'sell';
+        
+        card.className = `stat-card ${sideClass}`;
+        card.innerHTML = `
+            <span class="label">${data.time}</span>
+            <span class="val">$${data.price} | Vol: ${data.vol} | TR: ${data.trades} | Ice: ${data.hold}s | RSI: ${data.rsi}</span>
+        `;
+
+        ticker.prepend(card);
+
+        // Удаляем старые карточки, чтобы не тормозило
+        if (ticker.childNodes.length > 20) {
+            ticker.removeChild(ticker.lastChild);
         }
+    }
 
-        function connect() {
-            const ip = document.getElementById('targetIp').value;
-            if (socket) socket.disconnect();
+    // Ресайз графика при изменении окна
+    window.addEventListener('resize', () => {
+        chart.applyOptions({ width: window.innerWidth, height: window.innerHeight - 150 });
+    });
 
-            socket = io(`http://${ip}:8080`);
-
-            socket.on('connect', () => {
-                document.getElementById('status-dot').className = 'status-dot online';
-                console.log('Connected to Breathing Station');
-            });
-
-            socket.on('disconnect', () => {
-                document.getElementById('status-dot').className = 'status-dot offline';
-            });
-
-            socket.on('market_data', (data) => {
-                const priceEl = document.getElementById('price');
-                priceEl.innerText = `$${data.price}`;
-                priceEl.className = 'value ' + (data.side === '+' ? 'up' : 'down');
-                
-                document.getElementById('rsi').innerText = data.rsi;
-                document.getElementById('vol').innerText = data.vol;
-                document.getElementById('hold').innerText = data.hold + 's';
-
-                // Update Chart
-                chart.data.labels.push(data.time);
-                chart.data.datasets[0].data.push(parseFloat(data.price));
-                
-                if (chart.data.labels.length > 60) {
-                    chart.data.labels.shift();
-                    chart.data.datasets[0].data.shift();
-                }
-                chart.update('none');
-            });
-        }
-
-        initChart();
-        connect(); // Авто-старт при загрузке
-    </script>
+    connect();
+</script>
 </body>
 </html>
