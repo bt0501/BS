@@ -2,14 +2,14 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Breathing Station | PRO Terminal v3.5</title>
+    <title>Breathing Station | PRO Terminal v3.6</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://s3.tradingview.com/tv.js"></script>
     <style>
         :root { 
             --bg: #0b0e11; --green: #0ecb81; --red: #f6465d; 
             --bright-red: #ff0000; --orange: #f0b90b; --pink: #ff69b4;
-            --blue: #37b6ff; --cyan: #00ffff; --gray: #848e9c; 
+            --blue: #37b6ff; --cyan: #00ffff; --gray: #848e9c; --gold: #ffd700;
         }
         
         body { 
@@ -18,7 +18,6 @@
             overflow: hidden; height: 100vh; display: flex; flex-direction: column;
         }
 
-        /* Шапка */
         #header { 
             height: 40px; display: flex; align-items: center; padding: 0 15px; 
             background: #161a1e; border-bottom: 1px solid #2b3139; 
@@ -26,13 +25,11 @@
         }
         .logo { color: var(--orange); font-size: 14px; font-weight: bold; }
         input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 4px 8px; width: 120px; font-size: 12px; border-radius: 3px; }
-        button { background: var(--orange); border: none; padding: 4px 12px; cursor: pointer; font-weight: bold; font-size: 12px; border-radius: 3px; }
+        button { background: var(--orange); border: none; padding: 4px 12px; cursor: pointer; font-weight: bold; font-size: 12px; border-radius: 3px; margin-left: 5px; }
 
-        /* График - теперь занимает 55% высоты */
-        #chart-wrap { height: 55%; width: 100%; flex-shrink: 0; background: #000; border-bottom: 2px solid var(--orange); }
+        #chart-wrap { height: 50%; width: 100%; flex-shrink: 0; background: #000; border-bottom: 2px solid var(--orange); }
 
-        /* НИЖНЯЯ ПАНЕЛЬ */
-        .main-bottom-area { display: flex; height: 45%; overflow: hidden; }
+        .main-bottom-area { display: flex; height: 50%; overflow: hidden; }
 
         #terminal { 
             flex: 1.2; background: #000; overflow-y: auto; 
@@ -49,12 +46,11 @@
 
         .row { white-space: nowrap; line-height: 1.5; border-bottom: 1px solid #111; font-size: 14px; padding: 2px 0; }
 
-        /* Таблица аналитики - расширенная */
         #stats-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        #stats-table th { color: var(--gray); text-align: left; padding: 10px; border-bottom: 1px solid #222; background: #0f1215; }
+        #stats-table th { color: var(--gray); text-align: left; padding: 10px; border-bottom: 1px solid #222; background: #0f1215; position: sticky; top: 0; }
         #stats-table td { padding: 10px; border-bottom: 1px solid #111; }
+        .high-vol-row { background: rgba(255, 215, 0, 0.05); border-left: 3px solid var(--gold); }
 
-        /* Цвета */
         .c-gray { color: var(--gray); } .c-orange { color: var(--orange); }
         .c-pink { color: var(--pink); } .c-red { color: var(--red); }
         .c-bright-red { color: var(--bright-red); font-weight: bold; }
@@ -66,10 +62,10 @@
 <body>
 
 <div id="header">
-    <div class="logo">BREATHING_STATION_v3.5</div>
+    <div class="logo">BREATHING_STATION_v3.6</div>
     <div class="status">
         <span id="st" style="color:var(--red)">● OFFLINE</span> | 
-        IP: <input type="text" id="ip" value="192.168.1.118">
+        IP: <input type="text" id="ip" value="">
         <button onclick="connect()">CONNECT</button>
     </div>
 </div>
@@ -80,11 +76,10 @@
 
 <div class="main-bottom-area">
     <div id="terminal"></div>
-
     <div id="analytics-panel">
         <div class="analytics-header">
             <span class="c-orange" style="font-weight:bold">HISTORY ANALYTICS</span>
-            <div style="display:flex; gap:10px;">
+            <div>
                 <button onclick="setTF(1)">1m</button>
                 <button onclick="setTF(5)">5m</button>
                 <button onclick="setTF(60)">1h</button>
@@ -94,8 +89,8 @@
             <table id="stats-table">
                 <thead>
                     <tr>
-                        <th>Time</th>
-                        <th>Price Range</th>
+                        <th>Full Time</th>
+                        <th>Range</th>
                         <th>Vol</th>
                         <th>TR</th>
                         <th>Avg RSI</th>
@@ -113,19 +108,30 @@
     let socket;
     let historyData = []; 
     let currentTF = 1;
+    const alertSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+
+    // Загрузка сохраненного IP
+    window.onload = () => {
+        const savedIp = localStorage.getItem('station_ip');
+        if (savedIp) document.getElementById('ip').value = savedIp;
+        initTV();
+    };
 
     function initTV() {
         new TradingView.widget({
             "autosize": true, "symbol": "BINANCE:BTCUSDT", "interval": "15",
             "timezone": "Etc/UTC", "theme": "dark", "style": "1", "locale": "ru",
-            "container_id": "tradingview_chart", "hide_top_toolbar": false, "allow_symbol_change": true
+            "container_id": "tradingview_chart", "hide_top_toolbar": false
         });
     }
 
     function connect() {
         const targetIp = document.getElementById('ip').value;
+        localStorage.setItem('station_ip', targetIp); // Сохраняем IP[cite: 2]
+        
         const st = document.getElementById('st');
         if (socket) socket.disconnect();
+        
         socket = io(`http://${targetIp}:8080`, { transports: ['websocket'] });
         socket.on('connect', () => { st.innerText = "● ONLINE"; st.style.color = "var(--green)"; });
         socket.on('market_data', (data) => { addTerminalRow(data); });
@@ -141,9 +147,11 @@
         const rsi = parseFloat(data.rsi);
         const isBuy = data.side === '+';
 
+        // Звук на крупный объем
+        if (vol >= 50) alertSound.play();
+
         let volClass = vol >= 50 ? 'c-bright-red' : vol >= 20 ? 'c-red' : vol >= 10 ? 'c-pink' : vol >= 1 ? 'c-orange' : 'c-gray';
         let trClass = trades > 1000 ? 'c-bright-red' : trades >= 500 ? 'c-red' : trades >= 50 ? 'c-orange' : 'c-gray';
-        let holdClass = hold > 5 ? 'c-cyan' : 'c-blue';
         let rsiClass = rsi >= 70 ? 'c-red' : rsi <= 30 ? 'c-green' : 'c-blue';
 
         row.className = 'row';
@@ -153,7 +161,6 @@
             <span style="color: white; font-weight: bold;">$${data.price}</span> 
             <span class="c-gray">| V:</span><span class="${volClass}">${data.vol}</span> 
             <span class="c-gray">| T:</span><span class="${trClass}">${data.trades}</span> 
-            <span class="c-gray">| H:</span><span class="${holdClass}">${data.hold}s</span> 
             <span class="c-gray">| R:</span><span class="${rsiClass}">${data.rsi}</span>
         `;
 
@@ -161,15 +168,8 @@
         term.scrollTop = term.scrollHeight;
         if (term.childNodes.length > 100) term.removeChild(term.firstChild);
 
-        // Расширенный сбор данных для истории
-        historyData.push({ 
-            t: Date.now(), 
-            p: parseFloat(data.price), 
-            v: vol, 
-            tr: trades, 
-            r: rsi 
-        });
-        if (historyData.length > 3000) historyData.shift();
+        historyData.push({ t: Date.now(), p: parseFloat(data.price), v: vol, tr: trades, r: rsi });
+        if (historyData.length > 5000) historyData.shift();
         renderAnalytics();
     }
 
@@ -190,15 +190,20 @@
 
         const body = document.getElementById('stats-body');
         body.innerHTML = '';
-        Object.keys(groups).sort((a,b) => b-a).slice(0, 20).forEach(t => {
+        Object.keys(groups).sort((a,b) => b-a).slice(0, 30).forEach(t => {
             const g = groups[t];
             const avgRsi = (g.rsiSum / g.count).toFixed(1);
             let rClass = avgRsi >= 70 ? 'c-red' : avgRsi <= 30 ? 'c-green' : 'c-blue';
             
-            body.innerHTML += `<tr>
-                <td class="c-gray">${new Date(parseInt(t)).toLocaleTimeString([], {minute:'2-digit', second:'2-digit'})}</td>
+            // Формат времени с секундами
+            const timeStr = new Date(parseInt(t)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            
+            const isHighVol = g.vol > 100; // Подсветка аномального объема в истории
+
+            body.innerHTML += `<tr class="${isHighVol ? 'high-vol-row' : ''}">
+                <td class="c-gray">${timeStr}</td>
                 <td style="color:white; font-weight:bold;">$${g.min.toFixed(2)} - ${g.max.toFixed(2)}</td>
-                <td class="c-orange">${g.vol.toFixed(2)}</td>
+                <td class="${isHighVol ? 'c-bright-red' : 'c-orange'}">${g.vol.toFixed(2)}</td>
                 <td class="c-pink">${g.tr}</td>
                 <td class="${rClass}">${avgRsi}</td>
             </tr>`;
@@ -206,7 +211,6 @@
     }
 
     function setTF(m) { currentTF = m; renderAnalytics(); }
-    initTV();
 </script>
 </body>
 </html>
