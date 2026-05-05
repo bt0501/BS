@@ -3,86 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <title>Breathing Station | PRO Terminal</title>
-    <!-- Загружаем библиотеки: Socket.io и надежный виджет TradingView -->
+    <!-- Подключаем сокеты и график -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://s3.tradingview.com/tv.js"></script>
     <style>
         :root { --bg: #0b0e11; --green: #0ecb81; --red: #f6465d; --gold: #f0b90b; --gray: #848e9c; }
-        body { background: var(--bg); color: #eaecef; font-family: 'Consolas', monospace; margin: 0; padding: 0; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         
-        /* Компактная шапка */
-        #header { height: 35px; display: flex; align-items: center; padding: 0 15px; background: #161a1e; border-bottom: 1px solid #2b3139; justify-content: space-between; flex-shrink: 0; }
+        body { 
+            background: var(--bg); 
+            color: #eaecef; 
+            font-family: 'Consolas', monospace; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+        }
+        
+        /* Шапка терминала */
+        #header { 
+            height: 35px; 
+            display: flex; 
+            align-items: center; 
+            padding: 0 15px; 
+            background: #161a1e; 
+            border-bottom: 1px solid #2b3139; 
+            justify-content: space-between; 
+            flex-shrink: 0; 
+        }
         .logo { color: var(--gold); font-size: 12px; font-weight: bold; letter-spacing: 1px; }
         .status { font-size: 11px; }
         input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 2px 5px; width: 100px; font-size: 11px; border-radius: 3px; }
         button { background: var(--gold); border: none; padding: 2px 10px; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; }
 
-        /* График (занимает 35% высоты - аккуратно и компактно) */
+        /* График (35% высоты) */
         #chart-wrap { height: 35%; width: 100%; flex-shrink: 0; background: #000; border-bottom: 2px solid var(--gold); }
 
-        /* Терминал (65% высоты - МНОГО МЕСТА) */
+        /* Терминал (65% высоты, лента идет вниз) */
         #terminal { 
             height: 65%; 
             background: #000; 
             overflow-y: auto; 
             padding: 10px 15px;
             display: flex;
-            flex-direction: column-reverse; /* Новые данные всегда сверху */
+            flex-direction: column; /* Прямой порядок: сверху вниз */
+            scroll-behavior: smooth;
         }
 
-        /* Увеличенный шрифт для бегущей строки */
         .row { 
             white-space: nowrap; 
             line-height: 1.6; 
             border-bottom: 1px solid #111; 
-            font-size: 16px; /* Было 13px, сделал 16px чтобы глаза не уставали */
+            font-size: 16px; 
             font-weight: 500;
+            flex-shrink: 0;
+            padding: 2px 0;
         }
         
-        .row.buy { color: var(--green); text-shadow: 0 0 5px rgba(14, 203, 129, 0.2); }
-        .row.sell { color: var(--red); text-shadow: 0 0 5px rgba(246, 70, 93, 0.2); }
+        .row.buy { color: var(--green); }
+        .row.sell { color: var(--red); }
         .dim { color: var(--gray); font-size: 14px; }
         .gold { color: var(--gold); }
-        .watermark { position: fixed; bottom: 5px; right: 15px; font-size: 12px; color: var(--gold); opacity: 0.4; pointer-events: none; }
-    <style>
-    :root { --bg: #0b0e11; --green: #0ecb81; --red: #f6465d; --gold: #f0b90b; --gray: #848e9c; }
-    body { background: var(--bg); color: #eaecef; font-family: 'Consolas', monospace; margin: 0; padding: 0; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-    
-    #header { height: 35px; display: flex; align-items: center; padding: 0 15px; background: #161a1e; border-bottom: 1px solid #2b3139; justify-content: space-between; flex-shrink: 0; }
-    .logo { color: var(--gold); font-size: 12px; font-weight: bold; letter-spacing: 1px; }
-    input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 2px 5px; width: 100px; font-size: 11px; border-radius: 3px; }
-    button { background: var(--gold); border: none; padding: 2px 10px; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; }
+        
+        /* Подпись автора */
+        .watermark { position: fixed; bottom: 5px; right: 25px; font-size: 12px; color: var(--gold); opacity: 0.3; pointer-events: none; }
+    </style>
+</head>
+<body>
 
-    #chart-wrap { height: 35%; width: 100%; flex-shrink: 0; background: #000; border-bottom: 2px solid var(--gold); }
+<div id="header">
+    <div class="logo">BREATHING_STATION_v3.2</div>
+    <div class="status">
+        <span id="st" style="color:var(--red)">● OFFLINE</span> | 
+        IP: <input type="text" id="ip" value="192.168.1.118">
+        <button onclick="connect()">CONNECT</button>
+    </div>
+</div>
 
-    /* ТЕРМИНАЛ: Теперь идет сверху вниз */
-    #terminal { 
-        height: 65%; 
-        background: #000; 
-        overflow-y: auto; 
-        padding: 10px 15px;
-        display: flex;
-        flex-direction: column; /* Убрали reverse, теперь стандартный порядок */
-    }
+<div id="chart-wrap">
+    <div id="tradingview_chart" style="width: 100%; height: 100%;"></div>
+</div>
 
-    .row { 
-        white-space: nowrap; 
-        line-height: 1.6; 
-        border-bottom: 1px solid #111; 
-        font-size: 16px; 
-        font-weight: 500;
-        flex-shrink: 0;
-    }
-    
-    .row.buy { color: var(--green); }
-    .row.sell { color: var(--red); }
-    .dim { color: var(--gray); font-size: 14px; }
-    .gold { color: var(--gold); }
-</style>
+<div id="terminal"></div>
+
+<div class="watermark">Baitan_0501 白坦</div>
 
 <script>
     let socket;
 
+    // Запуск графика
     function initTV() {
         if (typeof TradingView === 'undefined') {
             setTimeout(initTV, 500);
@@ -97,12 +107,12 @@
             "style": "1",
             "locale": "ru",
             "container_id": "tradingview_chart",
-            "hide_side_toolbar": false,
             "hide_top_toolbar": true,
             "save_image": false
         });
     }
 
+    // Логика подключения
     function connect() {
         const targetIp = document.getElementById('ip').value;
         const st = document.getElementById('st');
@@ -120,6 +130,7 @@
         });
     }
 
+    // Добавление строки в терминал
     function addTerminalRow(data) {
         const term = document.getElementById('terminal');
         const row = document.createElement('div');
@@ -136,13 +147,16 @@
             <span class="dim">| RSI:</span><span class="gold">${data.rsi}</span>
         `;
 
-        term.appendChild(row); // Добавляем в конец (вниз)
+        // Добавляем вниз
+        term.appendChild(row); 
 
-        // Авто-скролл к последней сделке
+        // Магия авто-скролла: всегда видим последнюю сделку
         term.scrollTop = term.scrollHeight;
 
-        // Ограничение, чтобы не съедало память
-        if (term.childNodes.length > 200) term.removeChild(term.firstChild);
+        // Чистим память: удаляем старые строки (сверху)
+        if (term.childNodes.length > 100) {
+            term.removeChild(term.firstChild);
+        }
     }
 
     initTV();
