@@ -44,33 +44,45 @@
         .dim { color: var(--gray); font-size: 14px; }
         .gold { color: var(--gold); }
         .watermark { position: fixed; bottom: 5px; right: 15px; font-size: 12px; color: var(--gold); opacity: 0.4; pointer-events: none; }
-    </style>
-</head>
-<body>
+    <style>
+    :root { --bg: #0b0e11; --green: #0ecb81; --red: #f6465d; --gold: #f0b90b; --gray: #848e9c; }
+    body { background: var(--bg); color: #eaecef; font-family: 'Consolas', monospace; margin: 0; padding: 0; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+    
+    #header { height: 35px; display: flex; align-items: center; padding: 0 15px; background: #161a1e; border-bottom: 1px solid #2b3139; justify-content: space-between; flex-shrink: 0; }
+    .logo { color: var(--gold); font-size: 12px; font-weight: bold; letter-spacing: 1px; }
+    input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 2px 5px; width: 100px; font-size: 11px; border-radius: 3px; }
+    button { background: var(--gold); border: none; padding: 2px 10px; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; }
 
-<div id="header">
-    <div class="logo">BREATHING_STATION_v3.2</div>
-    <div class="status">
-        <span id="st" style="color:var(--red)">● OFFLINE</span> | 
-        IP: <input type="text" id="ip" value="192.168.1.118">
-        <button onclick="connect()">CONNECT</button>
-    </div>
-</div>
+    #chart-wrap { height: 35%; width: 100%; flex-shrink: 0; background: #000; border-bottom: 2px solid var(--gold); }
 
-<!-- Контейнер для графика TradingView -->
-<div id="chart-wrap">
-    <div id="tradingview_chart" style="width: 100%; height: 100%;"></div>
-</div>
+    /* ТЕРМИНАЛ: Теперь идет сверху вниз */
+    #terminal { 
+        height: 65%; 
+        background: #000; 
+        overflow-y: auto; 
+        padding: 10px 15px;
+        display: flex;
+        flex-direction: column; /* Убрали reverse, теперь стандартный порядок */
+    }
 
-<!-- Огромный терминал -->
-<div id="terminal"></div>
-
-<div class="watermark">Baitan_0501 白坦</div>
+    .row { 
+        white-space: nowrap; 
+        line-height: 1.6; 
+        border-bottom: 1px solid #111; 
+        font-size: 16px; 
+        font-weight: 500;
+        flex-shrink: 0;
+    }
+    
+    .row.buy { color: var(--green); }
+    .row.sell { color: var(--red); }
+    .dim { color: var(--gray); font-size: 14px; }
+    .gold { color: var(--gold); }
+</style>
 
 <script>
     let socket;
 
-    // Инициализация того самого рабочего графика из твоего кода
     function initTV() {
         if (typeof TradingView === 'undefined') {
             setTimeout(initTV, 500);
@@ -84,32 +96,23 @@
             "theme": "dark",
             "style": "1",
             "locale": "ru",
-            "toolbar_bg": "#f1f3f6",
-            "enable_publishing": false,
+            "container_id": "tradingview_chart",
+            "hide_side_toolbar": false,
             "hide_top_toolbar": true,
-            "hide_legend": true,
-            "save_image": false,
-            "container_id": "tradingview_chart"
+            "save_image": false
         });
     }
 
     function connect() {
         const targetIp = document.getElementById('ip').value;
         const st = document.getElementById('st');
-
         if (socket) socket.disconnect();
         
-        // Подключаемся к твоему Python-боту
         socket = io(`http://${targetIp}:8080`, { transports: ['websocket'] });
 
         socket.on('connect', () => {
             st.innerText = "● ONLINE";
             st.style.color = "var(--green)";
-        });
-
-        socket.on('connect_error', () => {
-            st.innerText = "● ERROR";
-            st.style.color = "var(--red)";
         });
 
         socket.on('market_data', (data) => {
@@ -123,8 +126,6 @@
         const isBuy = data.side === '+';
         
         row.className = `row ${isBuy ? 'buy' : 'sell'}`;
-        
-        // Четкая строка с увеличенным шрифтом
         row.innerHTML = `
             <span class="dim">[${data.time}]</span> 
             <b>${isBuy ? '▲ BUY ' : '▼ SELL'}</b> 
@@ -135,13 +136,15 @@
             <span class="dim">| RSI:</span><span class="gold">${data.rsi}</span>
         `;
 
-        term.prepend(row);
+        term.appendChild(row); // Добавляем в конец (вниз)
 
-        // Чтобы браузер не тормозил при долгой работе
-        if (term.childNodes.length > 150) term.removeChild(term.lastChild);
+        // Авто-скролл к последней сделке
+        term.scrollTop = term.scrollHeight;
+
+        // Ограничение, чтобы не съедало память
+        if (term.childNodes.length > 200) term.removeChild(term.firstChild);
     }
 
-    // Запуск
     initTV();
 </script>
 </body>
