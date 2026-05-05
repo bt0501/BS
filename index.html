@@ -153,6 +153,9 @@
         let volClass = vol >= 50 ? 'c-bright-red' : vol >= 20 ? 'c-red' : vol >= 10 ? 'c-pink' : vol >= 1 ? 'c-orange' : 'c-gray';
         let trClass = trades > 1000 ? 'c-bright-red' : trades >= 500 ? 'c-red' : trades >= 50 ? 'c-orange' : 'c-gray';
         let rsiClass = rsi >= 70 ? 'c-red' : rsi <= 30 ? 'c-green' : 'c-blue';
+        
+        // Цвет для удержания: если больше 5 сек - яркий циан
+        let holdClass = hold >= 5 ? 'c-cyan' : 'c-blue';
 
         row.className = 'row';
         row.innerHTML = `
@@ -161,6 +164,7 @@
             <span style="color: white; font-weight: bold;">$${data.price}</span> 
             <span class="c-gray">| V:</span><span class="${volClass}">${data.vol}</span> 
             <span class="c-gray">| T:</span><span class="${trClass}">${data.trades}</span> 
+            <span class="c-gray">| H:</span><span class="${holdClass}">${data.hold}s</span> 
             <span class="c-gray">| R:</span><span class="${rsiClass}">${data.rsi}</span>
         `;
 
