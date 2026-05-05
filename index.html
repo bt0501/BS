@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Breathing Station | PRO Terminal v3.6</title>
+    <title>Breathing Station | PRO Terminal v3.7</title>
     <link rel="icon" type="image/png" href="https://github.com/bt0501/BS/blob/main/icob.png?raw=true">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://s3.tradingview.com/tv.js"></script>
@@ -27,6 +27,7 @@
         .logo { color: var(--orange); font-size: 14px; font-weight: bold; }
         input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 4px 8px; width: 120px; font-size: 12px; border-radius: 3px; }
         button { background: var(--orange); border: none; padding: 4px 12px; cursor: pointer; font-weight: bold; font-size: 12px; border-radius: 3px; margin-left: 5px; }
+        .btn-clear { background: #474d57; color: white; margin-left: 10px; }
 
         #chart-wrap { height: 50%; width: 100%; flex-shrink: 0; background: #000; border-bottom: 2px solid var(--orange); }
 
@@ -63,7 +64,7 @@
 <body>
 
 <div id="header">
-    <div class="logo">BREATHING_STATION_v3.6</div>
+    <div class="logo">BREATHING_STATION_v3.7</div>
     <div class="status">
         <span id="st" style="color:var(--red)">● OFFLINE</span> | 
         IP: <input type="text" id="ip" value="">
@@ -84,6 +85,7 @@
                 <button onclick="setTF(1)">1m</button>
                 <button onclick="setTF(5)">5m</button>
                 <button onclick="setTF(60)">1h</button>
+                <button class="btn-clear" onclick="clearHistory()">CLEAR</button>
             </div>
         </div>
         <div style="overflow-y:auto; flex:1;">
@@ -111,10 +113,18 @@
     let currentTF = 1;
     const alertSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
 
-    // Загрузка сохраненного IP
     window.onload = () => {
         const savedIp = localStorage.getItem('station_ip');
         if (savedIp) document.getElementById('ip').value = savedIp;
+
+        // Восстановление истории из памяти при загрузке[cite: 2]
+        const savedHistory = localStorage.getItem('station_history');
+        if (savedHistory) {
+            try {
+                historyData = JSON.parse(savedHistory);
+                renderAnalytics();
+            } catch (e) { historyData = []; }
+        }
         initTV();
     };
 
@@ -128,7 +138,7 @@
 
     function connect() {
         const targetIp = document.getElementById('ip').value;
-        localStorage.setItem('station_ip', targetIp); // Сохраняем IP[cite: 2]
+        localStorage.setItem('station_ip', targetIp);
         
         const st = document.getElementById('st');
         if (socket) socket.disconnect();
@@ -148,14 +158,11 @@
         const rsi = parseFloat(data.rsi);
         const isBuy = data.side === '+';
 
-        // Звук на крупный объем
         if (vol >= 50) alertSound.play();
 
         let volClass = vol >= 50 ? 'c-bright-red' : vol >= 20 ? 'c-red' : vol >= 10 ? 'c-pink' : vol >= 1 ? 'c-orange' : 'c-gray';
         let trClass = trades > 1000 ? 'c-bright-red' : trades >= 500 ? 'c-red' : trades >= 50 ? 'c-orange' : 'c-gray';
         let rsiClass = rsi >= 70 ? 'c-red' : rsi <= 30 ? 'c-green' : 'c-blue';
-        
-        // Цвет для удержания: если больше 5 сек - яркий циан
         let holdClass = hold >= 5 ? 'c-cyan' : 'c-blue';
 
         row.className = 'row';
@@ -175,6 +182,9 @@
 
         historyData.push({ t: Date.now(), p: parseFloat(data.price), v: vol, tr: trades, r: rsi });
         if (historyData.length > 5000) historyData.shift();
+
+        // Сохранение каждого нового тика в память[cite: 2]
+        localStorage.setItem('station_history', JSON.stringify(historyData));
         renderAnalytics();
     }
 
@@ -199,11 +209,8 @@
             const g = groups[t];
             const avgRsi = (g.rsiSum / g.count).toFixed(1);
             let rClass = avgRsi >= 70 ? 'c-red' : avgRsi <= 30 ? 'c-green' : 'c-blue';
-            
-            // Формат времени с секундами
             const timeStr = new Date(parseInt(t)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-            
-            const isHighVol = g.vol > 100; // Подсветка аномального объема в истории
+            const isHighVol = g.vol > 100;
 
             body.innerHTML += `<tr class="${isHighVol ? 'high-vol-row' : ''}">
                 <td class="c-gray">${timeStr}</td>
@@ -216,6 +223,15 @@
     }
 
     function setTF(m) { currentTF = m; renderAnalytics(); }
+
+    function clearHistory() {
+        if(confirm("Очистить сохраненную историю?")) {
+            historyData = [];
+            localStorage.removeItem('station_history');
+            renderAnalytics();
+            document.getElementById('terminal').innerHTML = '';
+        }
+    }
 </script>
 </body>
 </html>
