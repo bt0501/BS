@@ -10,47 +10,47 @@
         :root { --bg: #0b0e11; --card-bg: #1e2329; --green: #0ecb81; --red: #f6465d; --gold: #f0b90b; }
         body { background: var(--bg); color: #eaecef; font-family: 'Roboto Mono', monospace; margin: 0; overflow: hidden; }
         
-        #header { height: 50px; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #2b3139; justify-content: space-between; }
+        #header { height: 60px; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #2b3139; justify-content: space-between; }
         .logo { color: var(--gold); font-weight: bold; font-size: 18px; }
         
-        #chart-container { height: calc(100vh - 150px); width: 100%; }
+        #chart-container { height: calc(100vh - 160px); width: 100%; }
 
-        /* Бегущая строка / Лента */
+        /* Лента сделок (Ticker) */
         #ticker-container { 
-            height: 80px; 
+            height: 100px; 
             background: #161a1e; 
             border-top: 2px solid var(--gold); 
             display: flex; 
             align-items: center; 
-            overflow: hidden; 
+            overflow-x: auto; 
+            overflow-y: hidden;
             white-space: nowrap;
-            position: relative;
+            padding: 0 10px;
         }
 
-        .ticker-track { display: flex; align-items: center; animation: scroll 20s linear infinite; }
+        #ticker { display: flex; flex-direction: row-reverse; align-items: center; }
         
         .stat-card {
-            display: inline-block;
-            padding: 10px 20px;
-            margin: 0 10px;
+            min-width: 280px;
+            padding: 10px 15px;
+            margin-right: 10px;
             background: var(--card-bg);
-            border-radius: 4px;
-            border-left: 3px solid #474d57;
+            border-radius: 6px;
+            border-left: 4px solid #474d57;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
         }
 
-        .stat-card.buy { border-left-color: var(--green); color: var(--green); }
-        .stat-card.sell { border-left-color: var(--red); color: var(--red); }
+        .stat-card.buy { border-left-color: var(--green); }
+        .stat-card.sell { border-left-color: var(--red); }
+        
+        .buy .price-val { color: var(--green); }
+        .sell .price-val { color: var(--red); }
 
-        .label { font-size: 10px; color: #848e9c; display: block; text-transform: uppercase; }
-        .val { font-size: 16px; font-weight: bold; }
-
-        @keyframes scroll {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(-50%); }
-        }
-
-        .ip-config { font-size: 10px; color: #474d57; }
-        input { background: transparent; border: 1px solid #2b3139; color: #848e9c; width: 100px; font-size: 10px; }
+        .label { font-size: 10px; color: #848e9c; display: block; margin-bottom: 4px; }
+        .val-row { font-size: 14px; font-weight: bold; }
+        .ip-config input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 5px; border-radius: 4px; }
+        button { background: var(--gold); border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -58,25 +58,34 @@
 <div id="header">
     <div class="logo">BREATHING STATION <span style="color:white">PRO</span></div>
     <div class="ip-config">
+        <span id="status-text" style="color: #f6465d; margin-right: 10px;">OFFLINE</span>
         IP: <input type="text" id="targetIp" value="192.168.1.118">
-        <button onclick="connect()">Link</button>
+        <button onclick="connect()">CONNECT</button>
     </div>
 </div>
 
 <div id="chart-container"></div>
 
 <div id="ticker-container">
-    <div id="ticker" class="ticker-track">
-        <!-- Карточки будут влетать сюда -->
+    <div id="ticker">
+        <!-- Карточки летят сюда -->
     </div>
 </div>
 
 <script>
     let socket;
-    const chart = LightweightCharts.createChart(document.getElementById('chart-container'), {
-        layout: { backgroundColor: '#0b0e11', textColor: '#848e9c' },
-        grid: { vertLines: { color: '#1f2226' }, horzLines: { color: '#1f2226' } },
-        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    const container = document.getElementById('chart-container');
+    
+    // Инициализация графика с обновленным синтаксисом
+    const chart = LightweightCharts.createChart(container, {
+        layout: { 
+            background: { color: '#0b0e11' },
+            textColor: '#848e9c',
+        },
+        grid: { 
+            vertLines: { color: '#1f2226' }, 
+            horzLines: { color: '#1f2226' } 
+        },
         timeScale: { timeVisible: true, secondsVisible: true }
     });
 
@@ -89,17 +98,28 @@
 
     function connect() {
         const ip = document.getElementById('targetIp').value;
+        const statusText = document.getElementById('status-text');
+        
         if (socket) socket.disconnect();
-        socket = io(`http://${ip}:8080`);
+        
+        console.log(`Attempting to connect to http://${ip}:8080...`);
+        socket = io(`http://${ip}:8080`, { transports: ['websocket'] });
+
+        socket.on('connect', () => {
+            statusText.innerText = 'ONLINE';
+            statusText.style.color = '#0ecb81';
+            console.log('Connected successfully!');
+        });
+
+        socket.on('connect_error', (err) => {
+            statusText.innerText = 'ERROR';
+            statusText.style.color = '#f6465d';
+            console.error('Connection failed:', err);
+        });
 
         socket.on('market_data', (data) => {
             const timeVal = Math.floor(Date.now() / 1000);
-            const price = parseFloat(data.price);
-            
-            // Обновляем график
-            areaSeries.update({ time: timeVal, value: price });
-
-            // Создаем новую карточку в ленте
+            areaSeries.update({ time: timeVal, value: parseFloat(data.price) });
             updateTicker(data);
         });
     }
@@ -107,27 +127,29 @@
     function updateTicker(data) {
         const ticker = document.getElementById('ticker');
         const card = document.createElement('div');
-        const sideClass = data.side === '+' ? 'buy' : 'sell';
+        const isBuy = data.side === '+';
         
-        card.className = `stat-card ${sideClass}`;
+        card.className = `stat-card ${isBuy ? 'buy' : 'sell'}`;
         card.innerHTML = `
-            <span class="label">${data.time}</span>
-            <span class="val">$${data.price} | Vol: ${data.vol} | TR: ${data.trades} | Ice: ${data.hold}s | RSI: ${data.rsi}</span>
+            <span class="label">${data.time} | RSI: ${data.rsi}</span>
+            <div class="val-row">
+                <span class="price-val">$${data.price}</span> 
+                <span style="color:#848e9c; font-size:12px">Vol: ${data.vol} TR: ${data.trades} Hold: ${data.hold}s</span>
+            </div>
         `;
 
-        ticker.prepend(card);
+        ticker.appendChild(card); // Добавляем в конец, так как flex-direction: row-reverse
 
-        // Удаляем старые карточки, чтобы не тормозило
-        if (ticker.childNodes.length > 20) {
-            ticker.removeChild(ticker.lastChild);
+        if (ticker.childNodes.length > 30) {
+            ticker.removeChild(ticker.firstChild);
         }
     }
 
-    // Ресайз графика при изменении окна
     window.addEventListener('resize', () => {
-        chart.applyOptions({ width: window.innerWidth, height: window.innerHeight - 150 });
+        chart.applyOptions({ width: container.offsetWidth, height: container.offsetHeight });
     });
 
+    // Запуск
     connect();
 </script>
 </body>
