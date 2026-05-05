@@ -1,0 +1,15 @@
+{
+  "short_name": "B_Station",
+  "name": "Breathing Station PRO",
+  "icons": [
+    {
+      "src": "https://github.com/bt0501/BS/blob/main/icob.png?raw=true",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "./index.html",
+  "display": "standalone",
+  "theme_color": "#0b0e11",
+  "background_color": "#0b0e11"
+}
