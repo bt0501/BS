@@ -9,47 +9,17 @@
     <style>
         :root { --bg: #0b0e11; --card-bg: #1e2329; --green: #0ecb81; --red: #f6465d; --gold: #f0b90b; }
         body { background: var(--bg); color: #eaecef; font-family: 'Roboto Mono', monospace; margin: 0; overflow: hidden; }
-        
         #header { height: 60px; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #2b3139; justify-content: space-between; }
         .logo { color: var(--gold); font-weight: bold; font-size: 18px; }
-        
         #chart-container { height: calc(100vh - 160px); width: 100%; }
-
-        /* Лента сделок (Ticker) */
-        #ticker-container { 
-            height: 100px; 
-            background: #161a1e; 
-            border-top: 2px solid var(--gold); 
-            display: flex; 
-            align-items: center; 
-            overflow-x: auto; 
-            overflow-y: hidden;
-            white-space: nowrap;
-            padding: 0 10px;
-        }
-
+        #ticker-container { height: 100px; background: #161a1e; border-top: 2px solid var(--gold); display: flex; align-items: center; overflow-x: auto; padding: 0 10px; }
         #ticker { display: flex; flex-direction: row-reverse; align-items: center; }
-        
-        .stat-card {
-            min-width: 280px;
-            padding: 10px 15px;
-            margin-right: 10px;
-            background: var(--card-bg);
-            border-radius: 6px;
-            border-left: 4px solid #474d57;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
-        }
-
+        .stat-card { min-width: 280px; padding: 10px 15px; margin-right: 10px; background: var(--card-bg); border-radius: 6px; border-left: 4px solid #474d57; }
         .stat-card.buy { border-left-color: var(--green); }
         .stat-card.sell { border-left-color: var(--red); }
-        
         .buy .price-val { color: var(--green); }
         .sell .price-val { color: var(--red); }
-
-        .label { font-size: 10px; color: #848e9c; display: block; margin-bottom: 4px; }
-        .val-row { font-size: 14px; font-weight: bold; }
-        .ip-config input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 5px; border-radius: 4px; }
+        .ip-config input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 5px; border-radius: 4px; width: 120px; }
         button { background: var(--gold); border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
@@ -58,68 +28,62 @@
 <div id="header">
     <div class="logo">BREATHING STATION <span style="color:white">PRO</span></div>
     <div class="ip-config">
-        <span id="status-text" style="color: #f6465d; margin-right: 10px;">OFFLINE</span>
-        IP: <input type="text" id="targetIp" value="192.168.1.118">
+        <span id="status-text" style="color: #f6465d; margin-right: 10px; font-size: 12px;">OFFLINE</span>
+        <input type="text" id="targetIp" value="192.168.1.118">
         <button onclick="connect()">CONNECT</button>
     </div>
 </div>
 
 <div id="chart-container"></div>
-
-<div id="ticker-container">
-    <div id="ticker">
-        <!-- Карточки летят сюда -->
-    </div>
-</div>
+<div id="ticker-container"><div id="ticker"></div></div>
 
 <script>
     let socket;
+    let areaSeries;
     const container = document.getElementById('chart-container');
-    
-    // Инициализация графика с обновленным синтаксисом
+
+    // 1. СНАЧАЛА СОЗДАЕМ ГРАФИК
     const chart = LightweightCharts.createChart(container, {
-        layout: { 
-            background: { color: '#0b0e11' },
-            textColor: '#848e9c',
-        },
-        grid: { 
-            vertLines: { color: '#1f2226' }, 
-            horzLines: { color: '#1f2226' } 
-        },
+        layout: { background: { color: '#0b0e11' }, textColor: '#848e9c' },
+        grid: { vertLines: { color: '#1f2226' }, horzLines: { color: '#1f2226' } },
         timeScale: { timeVisible: true, secondsVisible: true }
     });
 
-    const areaSeries = chart.addAreaSeries({
+    areaSeries = chart.addAreaSeries({
         lineColor: '#f0b90b',
         topColor: 'rgba(240, 185, 11, 0.3)',
         bottomColor: 'rgba(240, 185, 11, 0.0)',
         lineWidth: 2,
     });
 
+    // 2. ФУНКЦИЯ ПОДКЛЮЧЕНИЯ
     function connect() {
         const ip = document.getElementById('targetIp').value;
         const statusText = document.getElementById('status-text');
         
         if (socket) socket.disconnect();
         
-        console.log(`Attempting to connect to http://${ip}:8080...`);
-        socket = io(`http://${ip}:8080`, { transports: ['websocket'] });
+        // Используем http явно, чтобы избежать ошибок Mixed Content
+        socket = io(`http://${ip}:8080`, { 
+            transports: ['websocket'],
+            upgrade: false 
+        });
 
         socket.on('connect', () => {
             statusText.innerText = 'ONLINE';
             statusText.style.color = '#0ecb81';
-            console.log('Connected successfully!');
         });
 
-        socket.on('connect_error', (err) => {
-            statusText.innerText = 'ERROR';
+        socket.on('connect_error', () => {
+            statusText.innerText = 'CONN ERROR';
             statusText.style.color = '#f6465d';
-            console.error('Connection failed:', err);
         });
 
         socket.on('market_data', (data) => {
-            const timeVal = Math.floor(Date.now() / 1000);
-            areaSeries.update({ time: timeVal, value: parseFloat(data.price) });
+            if (areaSeries) {
+                const timeVal = Math.floor(Date.now() / 1000);
+                areaSeries.update({ time: timeVal, value: parseFloat(data.price) });
+            }
             updateTicker(data);
         });
     }
@@ -128,29 +92,24 @@
         const ticker = document.getElementById('ticker');
         const card = document.createElement('div');
         const isBuy = data.side === '+';
-        
         card.className = `stat-card ${isBuy ? 'buy' : 'sell'}`;
         card.innerHTML = `
-            <span class="label">${data.time} | RSI: ${data.rsi}</span>
-            <div class="val-row">
+            <span style="font-size:10px; color:#848e9c">${data.time} | RSI: ${data.rsi}</span>
+            <div style="font-size:14px; font-weight:bold">
                 <span class="price-val">$${data.price}</span> 
-                <span style="color:#848e9c; font-size:12px">Vol: ${data.vol} TR: ${data.trades} Hold: ${data.hold}s</span>
+                <span style="color:#848e9c; font-size:11px"> Vol:${data.vol} TR:${data.trades}</span>
             </div>
         `;
-
-        ticker.appendChild(card); // Добавляем в конец, так как flex-direction: row-reverse
-
-        if (ticker.childNodes.length > 30) {
-            ticker.removeChild(ticker.firstChild);
-        }
+        ticker.appendChild(card);
+        if (ticker.childNodes.length > 20) ticker.removeChild(ticker.firstChild);
     }
 
     window.addEventListener('resize', () => {
         chart.applyOptions({ width: container.offsetWidth, height: container.offsetHeight });
     });
 
-    // Запуск
-    connect();
+    // Запускаем через небольшую паузу, чтобы DOM прогрузился
+    setTimeout(connect, 500);
 </script>
 </body>
 </html>
