@@ -2,87 +2,71 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Breathing Station | PRO Terminal</title>
+    <title>Breathing Station | Terminal Pro</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         :root { --bg: #0b0e11; --green: #0ecb81; --red: #f6465d; --gold: #f0b90b; --gray: #848e9c; }
-        body { background: var(--bg); color: #eaecef; font-family: 'Consolas', 'Courier New', monospace; margin: 0; overflow: hidden; }
+        body { background: var(--bg); color: #eaecef; font-family: 'Consolas', monospace; margin: 0; padding: 0; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         
         /* Шапка */
-        #header { height: 50px; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #2b3139; justify-content: space-between; background: #161a1e; }
-        .logo { color: var(--gold); font-weight: bold; letter-spacing: 1px; }
-        .status-box { font-size: 12px; }
-        input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 4px; border-radius: 3px; width: 110px; font-family: monospace; }
-        button { background: var(--gold); border: none; padding: 4px 12px; cursor: pointer; font-weight: bold; border-radius: 3px; }
+        #header { height: 40px; display: flex; align-items: center; padding: 0 15px; background: #161a1e; border-bottom: 1px solid #2b3139; justify-content: space-between; flex-shrink: 0; }
+        .logo { color: var(--gold); font-size: 14px; font-weight: bold; }
+        .status { font-size: 11px; }
+        input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 2px 5px; width: 100px; font-size: 11px; }
+        button { background: var(--gold); border: none; padding: 2px 10px; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 2px; }
 
-        /* Контейнер графика */
-        #chart-container { height: calc(100vh - 200px); width: 100%; background: var(--bg); }
+        /* График (40% высоты) */
+        #chart-container { height: 40%; width: 100%; flex-shrink: 0; background: var(--bg); }
 
-        /* Консольная лента (Terminal Style) */
+        /* Терминал (60% высоты) */
         #terminal { 
-            height: 150px; 
+            height: 60%; 
             background: #000; 
-            border-top: 2px solid var(--gold); 
-            overflow-y: hidden; 
-            font-size: 13px; 
+            border-top: 1px solid var(--gold); 
+            overflow-y: auto; 
             padding: 5px 10px;
             display: flex;
-            flex-direction: column-reverse; /* Новые строки сверху */
+            flex-direction: column-reverse; /* Новые данные сверху */
         }
 
-        .log-row { 
-            display: block; 
-            white-space: nowrap; 
-            padding: 2px 0; 
-            border-bottom: 1px solid #111;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .log-row.buy { color: var(--green); }
-        .log-row.sell { color: var(--red); }
+        .row { white-space: nowrap; line-height: 1.4; border-bottom: 1px solid #0a0a0a; font-size: 13px; }
+        .row.buy { color: var(--green); }
+        .row.sell { color: var(--red); }
         .dim { color: var(--gray); }
-        .gold-text { color: var(--gold); }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .gold { color: var(--gold); }
     </style>
 </head>
 <body>
 
 <div id="header">
-    <div class="logo">BREATHING_STATION_v3.0</div>
-    <div class="status-box">
-        <span id="st" style="color:var(--red)">● DISCONNECTED</span> | 
+    <div class="logo">BREATHING_STATION_v3.1</div>
+    <div class="status">
+        <span id="st" style="color:var(--red)">OFFLINE</span> | 
         IP: <input type="text" id="ip" value="192.168.1.118">
         <button onclick="connect()">CONNECT</button>
     </div>
 </div>
 
 <div id="chart-container"></div>
-
-<div id="terminal">
-    <!-- Сюда будут падать строки как в консоли -->
-</div>
+<div id="terminal"></div>
 
 <script>
-    let socket;
-    let chart, areaSeries;
+    let socket, chart, areaSeries;
 
-    // Инициализация графика с защитой
     function initChart() {
         const container = document.getElementById('chart-container');
+        // Проверка: загрузилась ли библиотека TradingView
         if (typeof LightweightCharts === 'undefined') {
-            console.error("TradingView Lib not loaded!");
-            setTimeout(initChart, 1000);
+            setTimeout(initChart, 500);
             return;
         }
-        
+
         chart = LightweightCharts.createChart(container, {
             layout: { background: { color: '#0b0e11' }, textColor: '#848e9c' },
             grid: { vertLines: { visible: false }, horzLines: { color: '#1f2226' } },
             timeScale: { timeVisible: true, secondsVisible: true },
-            handleScroll: true,
-            handleScale: true
+            rightPriceScale: { borderVisible: false },
         });
 
         areaSeries = chart.addAreaSeries({
@@ -91,71 +75,63 @@
             bottomColor: 'rgba(240, 185, 11, 0)',
             lineWidth: 2,
         });
+
+        // Подгоняем размер под контейнер
+        new ResizeObserver(() => {
+            chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+        }).observe(container);
     }
 
     function connect() {
-        const targetIp = document.getElementById('ip').value;
+        const ip = document.getElementById('ip').value;
         const st = document.getElementById('st');
 
         if (socket) socket.disconnect();
         
-        socket = io(`http://${targetIp}:8080`, { transports: ['websocket'] });
+        // Форсируем использование Websocket для обхода Mixed Content блокировок
+        socket = io(`http://${ip}:8080`, { transports: ['websocket'] });
 
         socket.on('connect', () => {
-            st.innerText = "● ONLINE";
+            st.innerText = "ONLINE";
             st.style.color = "var(--green)";
         });
 
         socket.on('connect_error', () => {
-            st.innerText = "● CONN_ERROR";
+            st.innerText = "ERROR";
             st.style.color = "var(--red)";
         });
 
         socket.on('market_data', (data) => {
-            // Обновляем график
-            if (areaSeries) {
-                areaSeries.update({ 
-                    time: Math.floor(Date.now() / 1000), 
-                    value: parseFloat(data.price) 
-                });
-            }
-            // Добавляем строку в терминал
-            addTerminalRow(data);
+            const time = Math.floor(Date.now() / 1000);
+            if (areaSeries) areaSeries.update({ time: time, value: parseFloat(data.price) });
+            
+            logToTerminal(data);
         });
     }
 
-    function addTerminalRow(data) {
+    function logToTerminal(data) {
         const term = document.getElementById('terminal');
         const row = document.createElement('div');
         const isBuy = data.side === '+';
         
-        row.className = `log-row ${isBuy ? 'buy' : 'sell'}`;
+        row.className = `row ${isBuy ? 'buy' : 'sell'}`;
         
-        // Формируем аккуратную строчку как в CMD
+        // Формат один в один как в твоей CMD
         row.innerHTML = `
             <span class="dim">[${data.time}]</span> 
             <b>${isBuy ? '▲ BUY ' : '▼ SELL'}</b> 
             <span>$${data.price}</span> 
-            <span class="dim">| Vol:</span> <span>${data.vol}</span> 
-            <span class="dim">| TR:</span> <span>${data.trades}</span> 
-            <span class="dim">| Hold:</span> <span class="gold-text">${data.hold}s</span> 
-            <span class="dim">| RSI:</span> <span class="gold-text">${data.rsi}</span>
+            <span class="dim">| Vol:</span><span>${data.vol}</span> 
+            <span class="dim">| TR:</span><span>${data.trades}</span> 
+            <span class="dim">| Hold:</span><span class="gold">${data.hold}s</span> 
+            <span class="dim">| RSI:</span><span class="gold">${data.rsi}</span>
         `;
 
         term.prepend(row);
-
-        // Ограничение строк, чтобы не вешать браузер
-        if (term.childNodes.length > 50) term.removeChild(term.lastChild);
+        if (term.childNodes.length > 100) term.removeChild(term.lastChild);
     }
 
-    // Ресайз
-    window.addEventListener('resize', () => {
-        if(chart) chart.applyOptions({ width: document.getElementById('chart-container').offsetWidth });
-    });
-
     initChart();
-    // Даем время на загрузку скриптов перед авто-коннектом
-    setTimeout(connect, 1000);
 </script>
 </body>
 </html>
