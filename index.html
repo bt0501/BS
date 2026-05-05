@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breathing Station | Live Flow</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --gold: #f0b90b; --bg: #0b0e11; --card: #1e2329; --text: #eaecef; }
+        body { background: var(--bg); color: var(--text); font-family: 'Verdana', sans-serif; margin: 0; padding: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .config { background: var(--card); padding: 10px; border-radius: 5px; font-size: 12px; }
+        input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 5px; border-radius: 4px; }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; border-bottom: 3px solid var(--gold); text-align: center; }
+        .card h3 { margin: 0; font-size: 11px; color: #848e9c; text-transform: uppercase; letter-spacing: 1px; }
+        .value { font-size: 28px; font-weight: bold; margin-top: 10px; }
+        
+        .up { color: #0ecb81; }
+        .down { color: #f6465d; }
+        
+        #chart-wrapper { background: var(--card); padding: 20px; border-radius: 12px; height: 450px; position: relative; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .online { background: #0ecb81; box-shadow: 0 0 10px #0ecb81; }
+        .offline { background: #f6465d; }
+        .footer { margin-top: 20px; font-size: 12px; color: #474d57; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <span id="status-dot" class="status-dot offline"></span>
+            <span style="font-size: 20px; font-weight: bold;">BREATHING STATION <span style="color:var(--gold)">WEB</span></span>
+        </div>
+        <div class="config">
+            IP Станции: <input type="text" id="targetIp" value="192.168.1.118">
+            <button onclick="connect()">Connect</button>
+        </div>
+    </div>
+    
+    <div class="grid">
+        <div class="card"><h3>Price BTC</h3><div id="price" class="value">---</div></div>
+        <div class="card"><h3>RSI Index</h3><div id="rsi" class="value">---</div></div>
+        <div class="card"><h3>Vol (1s)</h3><div id="vol" class="value">---</div></div>
+        <div class="card"><h3>Iceberg</h3><div id="hold" class="value">---</div></div>
+    </div>
+
+    <div id="chart-wrapper">
+        <canvas id="mainChart"></canvas>
+    </div>
+
+    <div class="footer">Baitan_0501 白坦 • Analysis Engine</div>
+
+    <script>
+        let socket;
+        let chart;
+        const ctx = document.getElementById('mainChart').getContext('2d');
+
+        function initChart() {
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Live Price',
+                        data: [],
+                        borderColor: '#f0b90b',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.3,
+                        fill: true,
+                        backgroundColor: 'rgba(240, 185, 11, 0.05)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { grid: { color: '#2b3139' }, ticks: { color: '#848e9c' } },
+                        x: { display: false }
+                    }
+                }
+            });
+        }
+
+        function connect() {
+            const ip = document.getElementById('targetIp').value;
+            if (socket) socket.disconnect();
+
+            socket = io(`http://${ip}:8080`);
+
+            socket.on('connect', () => {
+                document.getElementById('status-dot').className = 'status-dot online';
+                console.log('Connected to Breathing Station');
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('status-dot').className = 'status-dot offline';
+            });
+
+            socket.on('market_data', (data) => {
+                const priceEl = document.getElementById('price');
+                priceEl.innerText = `$${data.price}`;
+                priceEl.className = 'value ' + (data.side === '+' ? 'up' : 'down');
+                
+                document.getElementById('rsi').innerText = data.rsi;
+                document.getElementById('vol').innerText = data.vol;
+                document.getElementById('hold').innerText = data.hold + 's';
+
+                // Update Chart
+                chart.data.labels.push(data.time);
+                chart.data.datasets[0].data.push(parseFloat(data.price));
+                
+                if (chart.data.labels.length > 60) {
+                    chart.data.labels.shift();
+                    chart.data.datasets[0].data.shift();
+                }
+                chart.update('none');
+            });
+        }
+
+        initChart();
+        connect(); // Авто-старт при загрузке
+    </script>
+</body>
+</html>
